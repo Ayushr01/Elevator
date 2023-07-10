@@ -17,7 +17,15 @@ class Elevator(models.Model):
 
     system = models.ForeignKey(System, on_delete=models.CASCADE)
     current_floor = models.PositiveIntegerField(default=0)
+    next_floor = models.PositiveIntegerField(default=0)
     is_under_maintainance = models.BooleanField(default=False)
     door_status = models.CharField(choices=door_status_choices, default='Closed')
     elevator_status = models.CharField(choices=elevator_status_choices, default='Halt')
+
+
+# class Request(models.Model):
+#     """
+#     Model for a Request
+#     """
+
 
