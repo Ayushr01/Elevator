@@ -1,7 +1,7 @@
-from rest_framework.generics import CreateAPIView, UpdateAPIView
+from rest_framework.generics import CreateAPIView, UpdateAPIView, ListAPIView
 from elevator.serializers import RequestSerializer
 from rest_framework.response import Response
-from .models import Elevator
+from .models import Elevator, Request
 from rest_framework.exceptions import ValidationError
 from django.db.models import F
 
@@ -97,5 +97,21 @@ class MoveElevatorAPIview(UpdateAPIView):
 
         serializer.save()
         return Response({'Message': "Elevator has arrived at {next_floor}", 'data': serializer.data})
+
+
+class GetActiveRequestsForElevator(ListAPIView):
+    """
+    View to return all active request for an elevator
+    """
+    queryset = Request.objects.all()
+    serializer_class = RequestSerializer
+    lookup_url_kwarg = 'id'
+    
+    def get_queryset(self):
+        """
+        returns queryset of all active requests for an elevator
+        """
+        elevator_id = self.kwargs.get(self.lookup_url_kwarg)
+        return get_all_requests_for_elevator(elevator_id=elevator_id)
 
 
