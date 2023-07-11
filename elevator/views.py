@@ -3,13 +3,13 @@ from elevator.serializers import RequestSerializer
 from rest_framework.response import Response
 from .models import Elevator
 from rest_framework.exceptions import ValidationError
+from django.db.models import F
 
 from elevator.utils import get_all_requests_for_elevator, get_most_suitable_elevator
 
 class RequestElevatorAPIView(CreateAPIView):
     """
     Api to request an elevator for service by a user
-
     This api will assign an optimal Elevator to this request according to the business logic.
     """
     serializer_class = RequestSerializer
@@ -21,10 +21,10 @@ class RequestElevatorAPIView(CreateAPIView):
         pickup_floor =  serializer.validated_data['pick_up_floor']
         elevator_assigned_id = get_most_suitable_elevator(pickup_floor)
         elevator_assigned_obj = Elevator.objects.filter(id=elevator_assigned_id).annotate(
-            systems_max_floor = 'system__max_floors'
-        ).values('id', 'elevator_status', 'system__max_floor', 'next_floor').first()
+            systems_max_floor = F('system__max_floors')
+        ).first()
         if elevator_assigned_obj.elevator_status == 'Idle':
-            elevator_assigned_obj.elevator_status = (
+            elevator_assigned_obj.elevator_status= (
                 'Going_up' if (
                     pickup_floor >= elevator_assigned_obj.current_floor and
                     pickup_floor < elevator_assigned_obj.systems_max_floor
@@ -32,8 +32,9 @@ class RequestElevatorAPIView(CreateAPIView):
                 else 'Going_down'
             )
             elevator_assigned_obj.next_floor = pickup_floor
+            elevator_assigned_obj.save()
         
-        serializer.validated_data['elevator'] = elevator_assigned_obj.id
+        serializer.validated_data['elevator'] = elevator_assigned_obj
         serializer.save()
 
         return Response(serializer.data)
