@@ -9,8 +9,7 @@ def get_most_suitable_elevator(pickup_floor: int):
     returns most suitable elevator_id for an elevator request based on the business logic
     """
     request_count_subquery = Request.objects.filter(
-        elevator_id=OuterRef('id'),
-        is_under_maintainance=False, 
+        elevator_id=OuterRef('id'), 
         status__in=['Active', 'Boarded']
     ).annotate(request_count=Coalesce(Count('id'), Value(0))).values('request_count')[:1]
 

@@ -170,3 +170,27 @@ class GetNextFloorForElevator(RetrieveAPIView):
     lookup_field = 'id'
     lookup_url_kwarg = 'elevator_id'
     serializer_class = ElevatorNextFloorSerializer
+
+
+class UserDestinationFloorAPI(UpdateAPIView):
+    """
+    request to add destination floor to respective elevator request
+    this will only happen if elevator is already alooted and elevator is at sama floor
+    """
+    queryset = Request.objects.all()
+    lookup_field = 'id'
+    lookup_url_kwarg = 'request_id'
+    serializer_class = RequestSerializer
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        if instance.status == 'Fulfilled':
+            raise ValidationError('This request is already processed')
+        if instance.elevator.current_floor != instance.pick_up_floor:
+            raise ValidationError('Your elevator has not arrived yet please wait.')
+        if instance.pick_up_floor == instance.destination_floor:
+            raise ValidationError('current floor and destination floor cant be same')
+        
+        serializer.save()
+        
+
