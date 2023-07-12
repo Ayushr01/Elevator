@@ -2,7 +2,7 @@ from rest_framework.generics import CreateAPIView, UpdateAPIView, ListAPIView, R
 from elevator.serializers import DoorStatusSerializer, ElevatorNextFloorSerializer, MoveElevatorSerializer, RequestSerializer
 from rest_framework.response import Response
 from .models import DOOR_STATUS_CHOICES, ELEVATOR_STATUS_CHOICES, REQUEST_STATUS_CHOICES, Elevator, Request
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError,  MethodNotAllowed
 from django.db.models import F, Q
 
 from elevator.utils import get_all_requests_for_elevator, get_floors_above_below_to_board_and_deboard, get_most_suitable_elevator, get_next_floor, get_next_floor_for_elevator, remove_people_from_undermaintainance_elevator
@@ -48,6 +48,14 @@ class MoveElevatorAPIview(UpdateAPIView):
     serializer_class = MoveElevatorSerializer
     lookup_field = 'id'
     lookup_url_kwarg = 'elevator_id'
+
+    def initial(self, request, *args, **kwargs):
+        """
+        Only patch method is allowed
+        """
+        super().initial(request, *args, **kwargs)
+        if self.request.method != 'PATCH':
+            raise MethodNotAllowed(request.method)
 
     def perform_update(self, serializer):
         """
@@ -134,6 +142,14 @@ class MarkUnderMaintainanceElevator(UpdateAPIView):
     lookup_url_kwarg = 'elevator_id'
     serializer_class = MoveElevatorSerializer
 
+    def initial(self, request, *args, **kwargs):
+        """
+        Only patch method is allowed
+        """
+        super().initial(request, *args, **kwargs)
+        if self.request.method != 'PATCH':
+            raise MethodNotAllowed(request.method)
+
     def perform_update(self, serializer):
         instance = serializer.instance
         instance.is_under_maintainance = True
@@ -154,6 +170,14 @@ class OpenCloseElevatorDoors(UpdateAPIView):
     lookup_field = 'id'
     lookup_url_kwarg = 'elevator_id'
     serializer_class = DoorStatusSerializer
+
+    def initial(self, request, *args, **kwargs):
+        """
+        Only patch method is allowed
+        """
+        super().initial(request, *args, **kwargs)
+        if self.request.method != 'PATCH':
+            raise MethodNotAllowed(request.method)
 
     def perform_update(self, serializer):
         instance = serializer.instance
@@ -194,6 +218,14 @@ class UserDestinationFloorAPI(UpdateAPIView):
     lookup_field = 'id'
     lookup_url_kwarg = 'request_id'
     serializer_class = RequestSerializer
+
+    def initial(self, request, *args, **kwargs):
+        """
+        Only patch method is allowed
+        """
+        super().initial(request, *args, **kwargs)
+        if self.request.method != 'PATCH':
+            raise MethodNotAllowed(request.method)
 
     def perform_update(self, serializer):
         instance = serializer.instance
