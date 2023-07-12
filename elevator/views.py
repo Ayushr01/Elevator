@@ -1,7 +1,7 @@
 from rest_framework.generics import CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
 from elevator.serializers import DoorStatusSerializer, ElevatorNextFloorSerializer, MoveElevatorSerializer, RequestSerializer
 from rest_framework.response import Response
-from .models import Elevator, Request
+from .models import DOOR_STATUS_CHOICES, ELEVATOR_STATUS_CHOICES, REQUEST_STATUS_CHOICES, Elevator, Request
 from rest_framework.exceptions import ValidationError
 from django.db.models import F, Q
 
@@ -23,13 +23,13 @@ class RequestElevatorAPIView(CreateAPIView):
         elevator_assigned_obj = Elevator.objects.filter(id=elevator_assigned_id).annotate(
             systems_max_floor = F('system__max_floors')
         ).first()
-        if elevator_assigned_obj.elevator_status == 'Idle':
+        if elevator_assigned_obj.elevator_status == ELEVATOR_STATUS_CHOICES.IDLE:
             elevator_assigned_obj.elevator_status= (
-                'Going_up' if (
+                ELEVATOR_STATUS_CHOICES.GOING_UP if (
                     pickup_floor >= elevator_assigned_obj.current_floor and
                     pickup_floor < elevator_assigned_obj.systems_max_floor
                 )
-                else 'Going_down'
+                else ELEVATOR_STATUS_CHOICES.GOING_DOWN
             )
             elevator_assigned_obj.next_floor = pickup_floor
             elevator_assigned_obj.save()
@@ -54,7 +54,7 @@ class MoveElevatorAPIview(UpdateAPIView):
         Updates the Elevators data for next_floor, current_floor, doors_status, and elevator status
         """
         instance = serializer.instance 
-        if instance.door_status == 'Open':
+        if instance.door_status == DOOR_STATUS_CHOICES.OPEN:
             raise ValidationError('Cannot move the elevator please close the door first')  
         if instance.is_under_maintainance:
             raise ValidationError('Cannot move elevator as it is undermaintainance')
@@ -72,11 +72,11 @@ class MoveElevatorAPIview(UpdateAPIView):
         #  current floor of the elevator will be next floor after moving (assumed reflects instantly)
         # instance.current_floor = instance.next_floor
         elevator_status = instance.elevator_status
-        all_requests_pending = all_requests.filter(status__in=['Active', 'Boarded'])
+        all_requests_pending = all_requests.filter(status__in=[REQUEST_STATUS_CHOICES.ACTIVE, REQUEST_STATUS_CHOICES.BOARDED])
         # If no request is pending for elevator mark status idle
         if not all_requests_pending:
             instance.next_floor = None
-            instance.elevator_status = 'Idle'
+            instance.elevator_status = ELEVATOR_STATUS_CHOICES.IDLE
             instance.save()
             raise ValidationError('There are no request for this elevator')
         else:
@@ -88,20 +88,20 @@ class MoveElevatorAPIview(UpdateAPIView):
             if not (nearest_floor_above_to_board or nearest_floor_above_to_deboard or nearest_floor_down_to_board or nearest_floor_down_to_deboard):
                 instance.current_floor = instance.next_floor
                 instance.next_floor = None
-                instance.elevator_status = 'Idle'
+                instance.elevator_status = ELEVATOR_STATUS_CHOICES.IDLE 
             else:
                 instance.next_floor = get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard, elevator_status, instance.current_floor)
             
             #  Marking elevator for up or down direction
             instance.elevator_status = (
-                'Going_up' if instance.next_floor > instance.current_floor
-                else 'Going_down'
+                ELEVATOR_STATUS_CHOICES.GOING_UP if instance.next_floor > instance.current_floor
+                else ELEVATOR_STATUS_CHOICES.GOING_DOWN
             )
             instance.current_floor = instance.next_floor
             all_requests_boarded = all_requests.filter(pick_up_floor=instance.current_floor)
-            all_requests_boarded.update(status='Boarded')
+            all_requests_boarded.update(status=REQUEST_STATUS_CHOICES.BOARDED)
             all_requests_fulfilled = all_requests.filter(destination_floor=instance.current_floor)
-            all_requests_fulfilled.update(status='Fulfilled')
+            all_requests_fulfilled.update(status=REQUEST_STATUS_CHOICES.FULFILLED)
             next_floor = get_next_floor_for_elevator(
                 all_requests, elevator_status, instance.current_floor
             )
@@ -139,8 +139,8 @@ class MarkUnderMaintainanceElevator(UpdateAPIView):
         instance.is_under_maintainance = True
         instance.current_floor = 0
         instance.next_floor = None
-        instance.elevator_status = 'Idle'
-        instance.door_status = 'Closed'
+        instance.elevator_status = ELEVATOR_STATUS_CHOICES.IDLE
+        instance.door_status = DOOR_STATUS_CHOICES.CLOSED
         instance.save()
 
         remove_people_from_undermaintainance_elevator(instance.id)
@@ -157,7 +157,7 @@ class OpenCloseElevatorDoors(UpdateAPIView):
 
     def perform_update(self, serializer):
         instance = serializer.instance
-        instance.door_status = 'Open' if instance.door_status == 'Closed' else 'Closed'
+        instance.door_status = DOOR_STATUS_CHOICES.OPEN if instance.door_status == DOOR_STATUS_CHOICES.CLOSED else DOOR_STATUS_CHOICES.CLOSED
         instance.save()
 
 
@@ -197,7 +197,7 @@ class UserDestinationFloorAPI(UpdateAPIView):
 
     def perform_update(self, serializer):
         instance = serializer.instance
-        if instance.status == 'Fulfilled':
+        if instance.status == REQUEST_STATUS_CHOICES.FULFILLED:
             raise ValidationError('This request is already processed')
         if instance.elevator.current_floor != instance.pick_up_floor:
             raise ValidationError('Your elevator has not arrived yet please wait.')
