@@ -168,7 +168,21 @@ class GetNextFloorForElevator(RetrieveAPIView):
     queryset = Elevator.objects.all()
     lookup_field = 'id'
     lookup_url_kwarg = 'elevator_id'
-    serializer_class = ElevatorNextFloorSerializer
+
+    def get(self, request, *args, **kwargs):
+        """
+        overwriting get function to retrieve latest data for next floor
+        """
+        all_requests = get_all_requests_for_elevator(elevator_id=self.kwargs[self.lookup_url_kwarg])
+        instance = self.get_object()
+        next_floor = get_next_floor_for_elevator(
+            all_requests, instance.elevator_status, instance.current_floor
+        )
+        data = {
+            "next_floor": 'Elevator has no requests either it is idle or under maintainance' if not next_floor else next_floor
+        }
+
+        return Response(data=data)
 
 
 class UserDestinationFloorAPI(UpdateAPIView):

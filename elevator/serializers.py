@@ -29,14 +29,15 @@ class DoorStatusSerializer(MoveElevatorSerializer):
         fields = ('door_status',)
 
 
-class ElevatorNextFloorSerializer(MoveElevatorSerializer):
+class ElevatorNextFloorSerializer(serializers.Serializer):
     """
     returns next floor of the elevator journey
     """
     next_floor = serializers.SerializerMethodField()
 
     def get_next_floor(self, obj):
+        print(obj)
         return 'Elevator has no requests either it is idle or under maintainance' if not obj.next_floor else obj.next_floor
 
-    class Meta(MoveElevatorSerializer.Meta):
+    class Meta:
         fields = ('next_floor',)
