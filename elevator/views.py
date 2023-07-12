@@ -5,7 +5,7 @@ from .models import Elevator, Request
 from rest_framework.exceptions import ValidationError
 from django.db.models import F, Q
 
-from elevator.utils import get_all_requests_for_elevator, get_most_suitable_elevator
+from elevator.utils import get_all_requests_for_elevator, get_floors_above_below_to_board_and_deboard, get_most_suitable_elevator, get_next_floor, get_next_floor_for_elevator
 
 class RequestElevatorAPIView(CreateAPIView):
     """
@@ -84,83 +84,28 @@ class MoveElevatorAPIview(UpdateAPIView):
             raise ValidationError('There are no request for this elevator')
         else:
             # Getting the nearest floor to reach in case where elevator is already going up / Down  or Is Idle 
-            nearest_floor_above_to_board = all_requests_pending.filter(pick_up_floor__gt=instance.current_floor, status='Active').order_by('pick_up_floor').first()
-            nearest_floor_above_to_deboard = all_requests_pending.filter(destination_floor__gt=instance.current_floor, status='Boarded').order_by('destination_floor').first()
-
-            nearest_floor_down_to_board = all_requests_pending.filter(pick_up_floor__lt=instance.current_floor, status='Active').order_by('-pick_up_floor').first()
-            nearest_floor_down_to_deboard = all_requests_pending.filter(destination_floor__lt=instance.current_floor, status='Boarded').order_by('-destination_floor').first()
+            nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard = (
+                get_floors_above_below_to_board_and_deboard(all_requests_pending, instance.current_floor)
+            )
 
             if not (nearest_floor_above_to_board or nearest_floor_above_to_deboard or nearest_floor_down_to_board or nearest_floor_down_to_deboard):
                 instance.current_floor = instance.next_floor
                 instance.next_floor = None
                 instance.elevator_status = 'Idle'
             else:
-                if elevator_status == 'Idle':
-                    if nearest_floor_above_to_board and nearest_floor_down_to_board:
-                        instance.next_floor = (
-                            nearest_floor_above_to_board.pick_up_floor 
-                            if abs(nearest_floor_above_to_board.pick_up_floor - instance.current_floor) <= abs(nearest_floor_down_to_board.pick_up_floor - instance.current_floor)
-                            else nearest_floor_down_to_board.pick_up_floor
-                        )
-                    else:
-                        instance.next_floor = (
-                            nearest_floor_above_to_board.pick_up_floor 
-                            if nearest_floor_above_to_board
-                            else nearest_floor_down_to_board.pick_up_floor
-                        )
-                elif elevator_status == 'Going_up':
-                    # check which is someone is there to board/de board up if both then choose the nearset floor
-                    if not (nearest_floor_above_to_board or nearest_floor_above_to_deboard):
-                        if nearest_floor_down_to_board and nearest_floor_down_to_deboard:
-                            instance.next_floor = (
-                                nearest_floor_down_to_board.pick_up_floor 
-                                if abs(nearest_floor_down_to_board.pick_up_floor - instance.current_floor) <= abs(nearest_floor_down_to_deboard.destination_floor - instance.current_floor)
-                                else nearest_floor_down_to_deboard.destination_floor
-                            )
-                        else:
-                            instance.next_floor = nearest_floor_down_to_board.pick_up_floor if nearest_floor_down_to_board else nearest_floor_down_to_deboard.destination_floor
-                        
-                    elif nearest_floor_above_to_board and nearest_floor_above_to_deboard:
-                        instance.next_floor = (
-                            nearest_floor_above_to_board.pick_up_floor 
-                            if abs(nearest_floor_above_to_board.pick_up_floor - instance.current_floor) <= abs(nearest_floor_above_to_deboard.destination_floor - instance.current_floor)
-                            else nearest_floor_above_to_deboard.destination_floor
-                        )
-                    else:
-                        instance.next_floor = (
-                            nearest_floor_above_to_board.pick_up_floor 
-                            if nearest_floor_above_to_board else nearest_floor_above_to_deboard.destination_floor
-                        )
-                else:
-                    if not (nearest_floor_down_to_board or nearest_floor_down_to_deboard):
-                        if nearest_floor_above_to_board and nearest_floor_above_to_deboard:
-                            instance.next_floor = (
-                            nearest_floor_above_to_board.pick_up_floor 
-                                if abs(nearest_floor_above_to_board.pick_up_floor - instance.current_floor) <= abs(nearest_floor_above_to_deboard.destination_floor - instance.current_floor)
-                                else nearest_floor_above_to_deboard.destination_floor
-                            )
-                        else:
-                            instance.next_floor = nearest_floor_above_to_board.pick_up_floor if nearest_floor_above_to_board else nearest_floor_above_to_deboard.destination_floor
-
-                    elif nearest_floor_down_to_board and nearest_floor_down_to_deboard:
-                        instance.next_floor = (
-                            nearest_floor_down_to_board.pick_up_floor 
-                            if abs(nearest_floor_down_to_board.pick_up_floor - instance.current_floor) <= abs(nearest_floor_down_to_deboard.destination_floor - instance.current_floor)
-                            else nearest_floor_down_to_deboard.destination_floor
-                        )
-                    else:
-                        instance.next_floor = (
-                            nearest_floor_down_to_board.pick_up_floor 
-                            if nearest_floor_down_to_board else nearest_floor_down_to_deboard.destination_floor
-                        )
+                instance.next_floor = get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard, elevator_status, instance.current_floor)
+            
             #  Marking elevator for up or down direction
             instance.elevator_status = (
                 'Going_up' if instance.next_floor > instance.current_floor
                 else 'Going_down'
             )
             instance.current_floor = instance.next_floor
+            next_floor = get_next_floor_for_elevator(
+                all_requests, elevator_status, instance.current_floor
+            )
+            instance.next_floor = None if next_floor == instance.current_floor else next_floor
             instance.save()
-        return Response({'Message': "Elevator has arrived at {next_floor}", 'data': serializer.data})
 
 
 class GetActiveRequestsForElevator(ListAPIView):

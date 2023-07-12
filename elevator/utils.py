@@ -74,4 +74,116 @@ def get_all_requests_for_elevator(elevator_id: int):
     """
     return Request.objects.filter(elevator_id=elevator_id, status__in=['Active', 'Boarded'])
 
+def get_floors_above_below_to_board_and_deboard(all_requests_pending, current_floor: int):
+    """
+    returns 4 objects 
+    1. nearest_floor_above_to_board -> nearest floor above to pickup user
+    2. nearest_floor_above_to_deboard -> nearest floor above to deoard user
+    3. nearest_floor_down_to_board ->  nearest floor down to pickup user
+    4. nearest_floor_down_to_deboard -> nearest floor above to deoard user
+    """
+    nearest_floor_above_to_board = all_requests_pending.filter(pick_up_floor__gt=current_floor, status='Active').order_by('pick_up_floor').first()
+    nearest_floor_above_to_deboard = all_requests_pending.filter(destination_floor__gt=current_floor, status='Boarded').order_by('destination_floor').first()
+
+    nearest_floor_down_to_board = all_requests_pending.filter(pick_up_floor__lt=current_floor, status='Active').order_by('-pick_up_floor').first()
+    nearest_floor_down_to_deboard = all_requests_pending.filter(destination_floor__lt=current_floor, status='Boarded').order_by('-destination_floor').first()
+
+    return nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard
+
+def get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard, elevator_status: str, current_floor: int):
+    """
+    returns the next floor the elevator will be going to
+    """
+    print(nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard)
+    next_floor = None
+    if elevator_status == 'Idle' and not(nearest_floor_above_to_deboard or nearest_floor_down_to_deboard):
+        if nearest_floor_above_to_board and nearest_floor_down_to_board:
+            next_floor = (
+                nearest_floor_above_to_board.pick_up_floor 
+                if abs(nearest_floor_above_to_board.pick_up_floor - current_floor) <= abs(nearest_floor_down_to_board.pick_up_floor - current_floor)
+                else nearest_floor_down_to_board.pick_up_floor
+            )
+        else:
+            next_floor = (
+                nearest_floor_above_to_board.pick_up_floor 
+                if nearest_floor_above_to_board
+                else nearest_floor_down_to_board.pick_up_floor
+            )
+    elif elevator_status == 'Idle' and (nearest_floor_above_to_deboard or nearest_floor_down_to_deboard):
+        if nearest_floor_above_to_deboard and nearest_floor_down_to_deboard:
+            next_floor = (
+                nearest_floor_above_to_deboard.destination_floor 
+                if abs(nearest_floor_above_to_deboard.destination_floor - current_floor) <= abs(nearest_floor_down_to_deboard.destination_floor - current_floor)
+                else nearest_floor_down_to_deboard.destination_floor
+            )
+        else:
+            next_floor = (
+                nearest_floor_above_to_deboard.destination_floor 
+                if nearest_floor_above_to_deboard
+                else nearest_floor_down_to_deboard.destination_floor
+            )
+    elif elevator_status == 'Going_up':
+        # check which is someone is there to board/de board up if both then choose the nearset floor
+        if not (nearest_floor_above_to_board or nearest_floor_above_to_deboard):
+            if nearest_floor_down_to_board and nearest_floor_down_to_deboard:
+                next_floor = (
+                    nearest_floor_down_to_board.pick_up_floor 
+                    if abs(nearest_floor_down_to_board.pick_up_floor - current_floor) <= abs(nearest_floor_down_to_deboard.destination_floor - current_floor)
+                    else nearest_floor_down_to_deboard.destination_floor
+                )
+            else:
+                next_floor = nearest_floor_down_to_board.pick_up_floor if nearest_floor_down_to_board else nearest_floor_down_to_deboard.destination_floor
+            
+        elif nearest_floor_above_to_board and nearest_floor_above_to_deboard:
+            next_floor = (
+                nearest_floor_above_to_board.pick_up_floor 
+                if abs(nearest_floor_above_to_board.pick_up_floor - current_floor) <= abs(nearest_floor_above_to_deboard.destination_floor - current_floor)
+                else nearest_floor_above_to_deboard.destination_floor
+            )
+        else:
+            next_floor = (
+                nearest_floor_above_to_board.pick_up_floor 
+                if nearest_floor_above_to_board else nearest_floor_above_to_deboard.destination_floor
+            )
+    else:
+        if not (nearest_floor_down_to_board or nearest_floor_down_to_deboard):
+            if nearest_floor_above_to_board and nearest_floor_above_to_deboard:
+                next_floor = (
+                nearest_floor_above_to_board.pick_up_floor 
+                    if abs(nearest_floor_above_to_board.pick_up_floor - current_floor) <= abs(nearest_floor_above_to_deboard.destination_floor - current_floor)
+                    else nearest_floor_above_to_deboard.destination_floor
+                )
+            else:
+                next_floor = nearest_floor_above_to_board.pick_up_floor if nearest_floor_above_to_board else nearest_floor_above_to_deboard.destination_floor
+
+        elif nearest_floor_down_to_board and nearest_floor_down_to_deboard:
+            next_floor = (
+                nearest_floor_down_to_board.pick_up_floor 
+                if abs(nearest_floor_down_to_board.pick_up_floor - current_floor) <= abs(nearest_floor_down_to_deboard.destination_floor - current_floor)
+                else nearest_floor_down_to_deboard.destination_floor
+            )
+        else:
+            next_floor = (
+                nearest_floor_down_to_board.pick_up_floor 
+                if nearest_floor_down_to_board else nearest_floor_down_to_deboard.destination_floor
+            )
+    
+    return next_floor 
+
+def get_next_floor_for_elevator(all_requests, elevator_status, current_floor):
+    """
+    returns next floor the elevator will e going to
+    """
+    all_requests_pending = all_requests.filter(status__in=['Active', 'Boarded'])
+    if not all_requests_pending:
+        return None
+
+    nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard = (
+        get_floors_above_below_to_board_and_deboard(all_requests_pending, current_floor)
+    )
+    if not(nearest_floor_above_to_board or nearest_floor_above_to_deboard or nearest_floor_down_to_board or nearest_floor_down_to_deboard):
+        return None
+    return get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard, elevator_status, current_floor)
+
+
 
