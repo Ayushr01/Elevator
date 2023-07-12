@@ -72,11 +72,6 @@ class MoveElevatorAPIview(UpdateAPIView):
         #  current floor of the elevator will be next floor after moving (assumed reflects instantly)
         # instance.current_floor = instance.next_floor
         elevator_status = instance.elevator_status
-        all_requests_boarded = all_requests.filter(pick_up_floor=instance.current_floor)
-        all_requests_boarded.update(status='Boarded')
-        # filtering requests who have their destination at current floor
-        all_requests_fulfilled = all_requests.filter(destination_floor=instance.current_floor)
-        all_requests_fulfilled.update(status='Fulfilled')
         all_requests_pending = all_requests.filter(status__in=['Active', 'Boarded'])
         # If no request is pending for elevator mark status idle
         if not all_requests_pending:
@@ -103,6 +98,10 @@ class MoveElevatorAPIview(UpdateAPIView):
                 else 'Going_down'
             )
             instance.current_floor = instance.next_floor
+            all_requests_boarded = all_requests.filter(pick_up_floor=instance.current_floor)
+            all_requests_boarded.update(status='Boarded')
+            all_requests_fulfilled = all_requests.filter(destination_floor=instance.current_floor)
+            all_requests_fulfilled.update(status='Fulfilled')
             next_floor = get_next_floor_for_elevator(
                 all_requests, elevator_status, instance.current_floor
             )
