@@ -10,6 +10,7 @@ def get_most_suitable_elevator(pickup_floor: int):
     """
     request_count_subquery = Request.objects.filter(
         elevator_id=OuterRef('id'),
+        is_under_maintainance=False, 
         status__in=['Active', 'Boarded']
     ).annotate(request_count=Coalesce(Count('id'), Value(0))).values('request_count')[:1]
 
@@ -61,9 +62,11 @@ def get_most_suitable_elevator(pickup_floor: int):
                     else elevators_above_and_comming_down.first().id
                 )
         elif not (elevator_id or elevators_below_and_comming_up):
+            #  when only elevators above current floor are present
             elevator_id = elevators_above_and_comming_down.first().id
 
         else:
+            #  when only below elevators are present
             elevator_id = elevators_below_and_comming_up.first().id
     
     return elevator_id
@@ -94,9 +97,9 @@ def get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard,
     """
     returns the next floor the elevator will be going to
     """
-    print(nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard)
     next_floor = None
     if elevator_status == 'Idle' and not(nearest_floor_above_to_deboard or nearest_floor_down_to_deboard):
+        # when elevator was at rest and someone boarded  it can be above or below or both
         if nearest_floor_above_to_board and nearest_floor_down_to_board:
             next_floor = (
                 nearest_floor_above_to_board.pick_up_floor 
@@ -110,6 +113,7 @@ def get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard,
                 else nearest_floor_down_to_board.pick_up_floor
             )
     elif elevator_status == 'Idle' and (nearest_floor_above_to_deboard or nearest_floor_down_to_deboard):
+        # when elevator was idle and someone boarded at current floor and has to go up or down.
         if nearest_floor_above_to_deboard and nearest_floor_down_to_deboard:
             next_floor = (
                 nearest_floor_above_to_deboard.destination_floor 
@@ -133,7 +137,7 @@ def get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard,
                 )
             else:
                 next_floor = nearest_floor_down_to_board.pick_up_floor if nearest_floor_down_to_board else nearest_floor_down_to_deboard.destination_floor
-            
+        # if there are requests to board and deboard above then will reach the first closest floor.
         elif nearest_floor_above_to_board and nearest_floor_above_to_deboard:
             next_floor = (
                 nearest_floor_above_to_board.pick_up_floor 
@@ -146,6 +150,7 @@ def get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard,
                 if nearest_floor_above_to_board else nearest_floor_above_to_deboard.destination_floor
             )
     else:
+        # case when list is going down we will take all requests which have to board or deboard till none are left in down side
         if not (nearest_floor_down_to_board or nearest_floor_down_to_deboard):
             if nearest_floor_above_to_board and nearest_floor_above_to_deboard:
                 next_floor = (
@@ -181,9 +186,17 @@ def get_next_floor_for_elevator(all_requests, elevator_status, current_floor):
     nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard = (
         get_floors_above_below_to_board_and_deboard(all_requests_pending, current_floor)
     )
+    #  if there are no requests then return next floor as null
     if not(nearest_floor_above_to_board or nearest_floor_above_to_deboard or nearest_floor_down_to_board or nearest_floor_down_to_deboard):
         return None
+    #  getting the next floor
     return get_next_floor(nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard, elevator_status, current_floor)
 
-
+def remove_people_from_undermaintainance_elevator(elevator_id: int):
+    """
+    marks all elevator requests for this elevator as full filled 
+    user will have to again request an elevator
+    """
+    all_request_active_or_boarded = get_all_requests_for_elevator(elevator_id)
+    all_request_active_or_boarded.update(status='Fulfilled')
 

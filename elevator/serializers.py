@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Request, Elevator
-from rest_framework.exceptions import ValidationError
 
 
 class RequestSerializer(serializers.ModelSerializer):
@@ -21,24 +20,6 @@ class MoveElevatorSerializer(serializers.ModelSerializer):
         model = Elevator
         fields = '__all__'
 
-    def validate_is_under_maintainance(self, value):
-        """
-        checks if the elevator to move is under maintainance the raise exception
-        """
-        if value:
-            raise ValidationError('Cannot move elevator as it is undermaintainance')
-        
-        return value
-
-    def validate_door_status(self, value):
-        """
-        If door is open raise validation for closing it
-        """
-        if value == 'Open':
-            raise ValidationError('Cannot move the elevator please close the door first')
-
-        return value
-
 
 class DoorStatusSerializer(MoveElevatorSerializer):
     """
@@ -46,3 +27,16 @@ class DoorStatusSerializer(MoveElevatorSerializer):
     """
     class Meta(MoveElevatorSerializer.Meta):
         fields = ('door_status',)
+
+
+class ElevatorNextFloorSerializer(MoveElevatorSerializer):
+    """
+    returns next floor of the elevator journey
+    """
+    next_floor = serializers.SerializerMethodField()
+
+    def get_next_floor(self, obj):
+        return 'Elevator has no requests either it is idle or under maintainance' if not obj.next_floor else obj.next_floor
+
+    class Meta(MoveElevatorSerializer.Meta):
+        fields = ('next_floor',)

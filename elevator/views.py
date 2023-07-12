@@ -1,11 +1,11 @@
-from rest_framework.generics import CreateAPIView, UpdateAPIView, ListAPIView
-from elevator.serializers import DoorStatusSerializer, MoveElevatorSerializer, RequestSerializer
+from rest_framework.generics import CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
+from elevator.serializers import DoorStatusSerializer, ElevatorNextFloorSerializer, MoveElevatorSerializer, RequestSerializer
 from rest_framework.response import Response
 from .models import Elevator, Request
 from rest_framework.exceptions import ValidationError
 from django.db.models import F, Q
 
-from elevator.utils import get_all_requests_for_elevator, get_floors_above_below_to_board_and_deboard, get_most_suitable_elevator, get_next_floor, get_next_floor_for_elevator
+from elevator.utils import get_all_requests_for_elevator, get_floors_above_below_to_board_and_deboard, get_most_suitable_elevator, get_next_floor, get_next_floor_for_elevator, remove_people_from_undermaintainance_elevator
 
 class RequestElevatorAPIView(CreateAPIView):
     """
@@ -53,9 +53,11 @@ class MoveElevatorAPIview(UpdateAPIView):
         """
         Updates the Elevators data for next_floor, current_floor, doors_status, and elevator status
         """
-        instance = serializer.instance    
-        if not serializer.is_valid():
-            raise ValidationError(serializer.errors)
+        instance = serializer.instance 
+        if instance.door_status == 'Open':
+            raise ValidationError('Cannot move the elevator please close the door first')  
+        if instance.is_under_maintainance:
+            raise ValidationError('Cannot move elevator as it is undermaintainance')
         # all requests for current elevator
         all_requests = get_all_requests_for_elevator(elevator_id=instance.id)
         # These request will be picked up at current floor
@@ -123,13 +125,26 @@ class GetActiveRequestsForElevator(ListAPIView):
         return get_all_requests_for_elevator(elevator_id=elevator_id)
 
 
-class UnderMaintainanceElevator(UpdateAPIView):
+class MarkUnderMaintainanceElevator(UpdateAPIView):
     """
     View to mark elevator under maintainance and deboard all members at current floor
     also marl all active requests for this elevator as fulfilled and user can request fro new elevator
     """
+    queryset = Elevator.objects.all()
+    lookup_field = 'id'
+    lookup_url_kwarg = 'elevator_id'
+    serializer_class = MoveElevatorSerializer
+
     def perform_update(self, serializer):
-        return super().perform_update(serializer)
+        instance = serializer.instance
+        instance.is_under_maintainance = True
+        instance.current_floor = 0
+        instance.next_floor = None
+        instance.elevator_status = 'Idle'
+        instance.door_status = 'Closed'
+        instance.save()
+
+        remove_people_from_undermaintainance_elevator(instance.id)
     
 
 class OpenCloseElevatorDoors(UpdateAPIView):
@@ -146,3 +161,12 @@ class OpenCloseElevatorDoors(UpdateAPIView):
         instance.door_status = 'Open' if instance.door_status == 'Closed' else 'Closed'
         instance.save()
 
+
+class GetNextFloorForElevator(RetrieveAPIView):
+    """
+    return the next floor the lift would be going to.
+    """
+    queryset = Elevator.objects.all()
+    lookup_field = 'id'
+    lookup_url_kwarg = 'elevator_id'
+    serializer_class = ElevatorNextFloorSerializer
