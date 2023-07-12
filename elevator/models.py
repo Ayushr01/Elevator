@@ -7,7 +7,7 @@ class Elevator(models.Model):
     """
     door_status_choices = (
         ('Open', 'Open'),
-        ('closed', 'closed')
+        ('Closed', 'Closed')
     )
     elevator_status_choices = (
         ('Going_up', 'Going_up'),
@@ -29,6 +29,7 @@ class Request(models.Model):
     """
     STATUS_CHOICES = (
         ('Active', 'Active'),
+        ('Boarded', 'Boarded'),
         ('Fulfilled', 'Fulfilled')
     )
     pick_up_floor = models.BigIntegerField()

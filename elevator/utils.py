@@ -10,10 +10,10 @@ def get_most_suitable_elevator(pickup_floor: int):
     """
     request_count_subquery = Request.objects.filter(
         elevator_id=OuterRef('id'),
-        status='Active'
+        status__in=['Active', 'Boarded']
     ).annotate(request_count=Coalesce(Count('id'), Value(0))).values('request_count')[:1]
 
-    elevators_with_active_request_count = Elevator.objects.annotate(
+    elevators_with_active_request_count = Elevator.objects.filter(is_under_maintainance=False).annotate(
         request_count = Coalesce(
         Subquery(request_count_subquery, output_field=IntegerField()), Value(0)
         ),
@@ -21,7 +21,7 @@ def get_most_suitable_elevator(pickup_floor: int):
     )
 
     if not elevators_with_active_request_count:
-        raise ValidationError('System is not initialized yet')
+        raise ValidationError('System is not initialized yet or all elevators are under maintainance')
 
     # assign elevator with minimal requests active 
     elevator_id = None
@@ -72,6 +72,6 @@ def get_all_requests_for_elevator(elevator_id: int):
     """
     returns queryset of all active requests for an elevator
     """
-    return Request.objects.filter(elevator_id=elevator_id, status='Active')
+    return Request.objects.filter(elevator_id=elevator_id, status__in=['Active', 'Boarded'])
 
 
