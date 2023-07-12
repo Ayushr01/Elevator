@@ -16,8 +16,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from system import urls as system_urls
+from elevator import urls as elevator_urls
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/elevatorsystem/', include(system_urls))
+    path('api/elevatorsystem/', include(system_urls)),
+    path('api/elevator/', include(elevator_urls))
 ]
