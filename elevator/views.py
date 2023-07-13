@@ -1,5 +1,5 @@
 from rest_framework.generics import CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
-from elevator.serializers import DoorStatusSerializer, ElevatorNextFloorSerializer, MoveElevatorSerializer, RequestSerializer
+from elevator.serializers import AddDestianationFloorSerialzer, DoorStatusSerializer, MoveElevatorSerializer, RequestSerializer
 from rest_framework.response import Response
 from .models import DOOR_STATUS_CHOICES, ELEVATOR_STATUS_CHOICES, REQUEST_STATUS_CHOICES, Elevator, Request
 from rest_framework.exceptions import ValidationError,  MethodNotAllowed
@@ -73,9 +73,10 @@ class MoveElevatorAPIview(UpdateAPIView):
         requests_with_no_destinations = all_requests.filter(
             pick_up_floor=instance.current_floor,
             destination_floor__isnull=True
-        )
+        ).values_list('id', flat=True)
+
         if requests_with_no_destinations:
-            raise ValidationError('Some users have not choosen their destination floor please choose.')
+            raise ValidationError(f"Some users have not choosen their destination floor please choose. thier ids are ({','.join(map(str, requests_with_no_destinations))})")
     
         #  current floor of the elevator will be next floor after moving (assumed reflects instantly)
         # instance.current_floor = instance.next_floor
@@ -217,25 +218,24 @@ class UserDestinationFloorAPI(UpdateAPIView):
     queryset = Request.objects.all()
     lookup_field = 'id'
     lookup_url_kwarg = 'request_id'
-    serializer_class = RequestSerializer
+    serializer_class = AddDestianationFloorSerialzer
 
-    def initial(self, request, *args, **kwargs):
-        """
-        Only patch method is allowed
-        """
-        super().initial(request, *args, **kwargs)
-        if self.request.method != 'PATCH':
-            raise MethodNotAllowed(request.method)
-
-    def perform_update(self, serializer):
-        instance = serializer.instance
-        if instance.status == REQUEST_STATUS_CHOICES.FULFILLED:
-            raise ValidationError('This request is already processed')
+    def update(self, request, *args, **kwargs):
+        allowed_fields = ['destination_floor']
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
         if instance.elevator.current_floor != instance.pick_up_floor:
             raise ValidationError('Your elevator has not arrived yet please wait.')
         if instance.pick_up_floor == instance.destination_floor:
             raise ValidationError('current floor and destination floor cant be same')
-        
-        serializer.save()
-        
+
+        for field in allowed_fields:
+            if field in request.data:
+                setattr(instance, field, request.data[field])
+
+        instance.save()
+
+        return Response(serializer.data)
+
 

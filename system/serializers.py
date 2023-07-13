@@ -5,7 +5,6 @@ class CreateElevatorSystemSerializer(serializers.ModelSerializer):
     """
     Serializes data for newly created elevator system
     """
-
     class Meta:
         model = System
         fields = '__all__'

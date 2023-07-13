@@ -16,6 +16,4 @@ urlpatterns = [
     path('<int:elevator_id>/next-floor',GetNextFloorForElevator.as_view(), name='elevators-next-floor'),
     path('<int:elevator_id>/under-maintainance',MarkUnderMaintainanceElevator.as_view(), name='under-maintainance-elevator'),
     path('<int:request_id>/add-destination',UserDestinationFloorAPI.as_view(), name='add-destination-floor'),
-
-
 ]
