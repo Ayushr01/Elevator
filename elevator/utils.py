@@ -39,12 +39,12 @@ def get_most_suitable_elevator(pickup_floor: int):
     #  take the nearest one.
     if not elevator_id:
         elevators_below_and_comming_up = elevators_with_active_request_count.filter(
-            Q(next_floor__gte=pickup_floor) | Q(next_floor=0),
-            current_floor__lt=pickup_floor
+            current_floor__lt=pickup_floor,
+            elevator_status__in=[ELEVATOR_STATUS_CHOICES.GOING_UP, ELEVATOR_STATUS_CHOICES.IDLE],
         ).order_by('floor_difference', 'request_count')
-
+        
         elevators_above_and_comming_down = elevators_with_active_request_count.filter(
-            Q(next_floor__lte=pickup_floor) | Q(next_floor=0),
+            elevator_status__in=[ELEVATOR_STATUS_CHOICES.GOING_DOWN, ELEVATOR_STATUS_CHOICES.IDLE],
             current_floor__gt=pickup_floor,
         ).order_by('floor_difference', 'request_count')
         # when there are elevators below and above
