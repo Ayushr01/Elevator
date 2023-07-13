@@ -84,7 +84,7 @@ def get_floors_above_below_to_board_and_deboard(all_requests_pending, current_fl
     3. nearest_floor_down_to_board ->  nearest floor down to pickup user
     4. nearest_floor_down_to_deboard -> nearest floor above to deoard user
     """
-    nearest_floor_above_to_board = all_requests_pending.filter(pick_up_floor__gt=current_floor, status=REQUEST_STATUS_CHOICES.ACTIVE).order_by('pick_up_floor').first()
+    nearest_floor_above_to_board = all_requests_pending.filter(pick_up_floor__gt=current_floor, status__in=REQUEST_STATUS_CHOICES.ACTIVE).order_by('pick_up_floor').first()
     nearest_floor_above_to_deboard = all_requests_pending.filter(destination_floor__gt=current_floor, status=REQUEST_STATUS_CHOICES.BOARDED).order_by('destination_floor').first()
 
     nearest_floor_down_to_board = all_requests_pending.filter(pick_up_floor__lt=current_floor, status=REQUEST_STATUS_CHOICES.ACTIVE).order_by('-pick_up_floor').first()
@@ -181,7 +181,6 @@ def get_next_floor_for_elevator(all_requests, elevator_status, current_floor):
     all_requests_pending = all_requests.filter(status__in=[REQUEST_STATUS_CHOICES.ACTIVE, REQUEST_STATUS_CHOICES.BOARDED])
     if not all_requests_pending:
         return None
-
     nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard = (
         get_floors_above_below_to_board_and_deboard(all_requests_pending, current_floor)
     )

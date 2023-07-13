@@ -62,13 +62,13 @@ class MoveElevatorAPIview(UpdateAPIView):
         Updates the Elevators data for next_floor, current_floor, doors_status, and elevator status
         """
         instance = serializer.instance 
+        previous_floor = instance.current_floor
         if instance.door_status == DOOR_STATUS_CHOICES.OPEN:
             raise ValidationError('Cannot move the elevator please close the door first')  
         if instance.is_under_maintainance:
             raise ValidationError('Cannot move elevator as it is undermaintainance')
         # all requests for current elevator
         all_requests = get_all_requests_for_elevator(elevator_id=instance.id)
-        # These request will be picked up at current floor
         #  Please Note these people have to enter their destination else exception will be raised (code logic)
         requests_with_no_destinations = all_requests.filter(
             pick_up_floor=instance.current_floor,
@@ -93,7 +93,6 @@ class MoveElevatorAPIview(UpdateAPIView):
             nearest_floor_above_to_board, nearest_floor_above_to_deboard, nearest_floor_down_to_board, nearest_floor_down_to_deboard = (
                 get_floors_above_below_to_board_and_deboard(all_requests_pending, instance.current_floor)
             )
-
             if not (nearest_floor_above_to_board or nearest_floor_above_to_deboard or nearest_floor_down_to_board or nearest_floor_down_to_deboard):
                 instance.current_floor = instance.next_floor
                 instance.next_floor = None
@@ -107,7 +106,8 @@ class MoveElevatorAPIview(UpdateAPIView):
                 else ELEVATOR_STATUS_CHOICES.GOING_DOWN
             )
             instance.current_floor = instance.next_floor
-            all_requests_boarded = all_requests.filter(pick_up_floor=instance.current_floor)
+            # These request will be picked up at current floor
+            all_requests_boarded = all_requests.filter(Q(pick_up_floor=instance.current_floor) | Q(pick_up_floor = previous_floor))
             all_requests_boarded.update(status=REQUEST_STATUS_CHOICES.BOARDED)
             all_requests_fulfilled = all_requests.filter(destination_floor=instance.current_floor)
             all_requests_fulfilled.update(status=REQUEST_STATUS_CHOICES.FULFILLED)
