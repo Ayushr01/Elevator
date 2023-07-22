@@ -136,7 +136,7 @@ For reference https://api.postman.com/collections/18804740-0e076161-be83-4650-90
     "system": 8
 }
 
-8. http://127.0.0.1:8000/api/elevator/59/add-destination  --> user adds their destination floor NOTE this is mandatory for every user to choose their destination floor at the time of boarding else elevator will not move .
+8. http://127.0.0.1:8000/api/elevator/request-elevator/106/  --> user adds their destination floor NOTE this is mandatory for every user to choose their destination floor at the time of boarding else elevator will not move .
    Method - PUT
    payload {
     "destination_floor": 9
