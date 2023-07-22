@@ -45,13 +45,29 @@ class ElevatorNextFloorSerializer(serializers.Serializer):
 
 class  AddDestianationFloorSerialzer(serializers.Serializer):
     """
+    Serilaizing data for updating destination floor
     """
     destination_floor = serializers.IntegerField(required=True)
 
     class Meta:
         fields = ('destination_floor', )
     
-    def validate_status(self, value):
-        if value == REQUEST_STATUS_CHOICES.FULFILLED:
-            raise ValidationError('This request is already processed')
-        return value
+    def validate(self, data):
+        instance = self.instance
+
+        if not data.get('destination_floor'):
+            raise ValidationError('Destination floor is expected in payload')
+
+        # Check if the request is already processed
+        if instance.status == REQUEST_STATUS_CHOICES.FULFILLED:
+            raise ValidationError('This request is already processed.')
+
+        # Check if the elevator has arrived at the pick-up floor
+        if instance.elevator.current_floor != instance.pick_up_floor:
+            raise ValidationError('Your elevator has not arrived yet, please wait.')
+
+        # Check if the pick-up floor and destination floor are the same
+        if instance.pick_up_floor == data['destination_floor']:
+            raise ValidationError('Current floor and destination floor cannot be the same.')
+
+        return data

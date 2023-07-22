@@ -7,7 +7,7 @@ from rest_framework.exceptions import ValidationError
 
 from system.serializers import CreateElevatorSystemSerializer
 
-class CreateElevatorSystemView(viewsets.ModelViewSet):
+class ElevatorSystemViewSet(viewsets.ModelViewSet):
     """
     View to create an elevator system.
     """

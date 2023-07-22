@@ -1,19 +1,22 @@
-from django.urls import path
+from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 from .views import (
-    RequestElevatorAPIView, MoveElevatorAPIview, GetActiveRequestsForElevator,
-    OpenCloseElevatorDoors, GetNextFloorForElevator, MarkUnderMaintainanceElevator,
-    UserDestinationFloorAPI
+    ElevatorViewSet, RequestViewSet
 )
 
 router = SimpleRouter()
+router.register('', ElevatorViewSet)
+request_router = SimpleRouter()
+request_router.register('', RequestViewSet)
+
+
 
 urlpatterns = [
-    path('request-elevator', RequestElevatorAPIView.as_view(), name='request_elevator'),
-    path('<int:elevator_id>/move-elevator', MoveElevatorAPIview.as_view(), name='move-elevator'),
-    path('<int:elevator_id>/get-active-requests',GetActiveRequestsForElevator.as_view(), name='elevators-requests'),
-    path('<int:elevator_id>/open-close-doors',OpenCloseElevatorDoors.as_view(), name='elevators-requests'),
-    path('<int:elevator_id>/next-floor',GetNextFloorForElevator.as_view(), name='elevators-next-floor'),
-    path('<int:elevator_id>/under-maintainance',MarkUnderMaintainanceElevator.as_view(), name='under-maintainance-elevator'),
-    path('<int:request_id>/add-destination',UserDestinationFloorAPI.as_view(), name='add-destination-floor'),
+    # Include the custom actions as separate URL patterns.
+    path('<int:elevator_id>/move-elevator', ElevatorViewSet.as_view({'patch': 'move_elevator'}), name='move-elevator'),
+    path('<int:elevator_id>/get-active-requests', ElevatorViewSet.as_view({'get': 'get_all_active_request'}), name='get_all_active_requests'),
+    path('<int:elevator_id>/open-close-doors', ElevatorViewSet.as_view({'patch': 'open_close_doors'}), name='open_close_doors'),
+    path('<int:elevator_id>/under-maintainance', ElevatorViewSet.as_view({'patch': 'mark_under_maintainance'}), name='mark_under_maintainance'),
+    path('<int:elevator_id>/next-floor', ElevatorViewSet.as_view({'get': 'get_next_floor'}), name='get_next_floor'),
+    path('request-elevator/', include(request_router.urls)),
 ]

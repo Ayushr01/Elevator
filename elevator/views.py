@@ -4,60 +4,90 @@ from rest_framework.response import Response
 from .models import DOOR_STATUS_CHOICES, ELEVATOR_STATUS_CHOICES, REQUEST_STATUS_CHOICES, Elevator, Request
 from rest_framework.exceptions import ValidationError,  MethodNotAllowed
 from django.db.models import F, Q
+from rest_framework import viewsets
+from rest_framework.decorators import action
 
 from elevator.utils import get_all_requests_for_elevator, get_floors_above_below_to_board_and_deboard, get_most_suitable_elevator, get_next_floor, get_next_floor_for_elevator, remove_people_from_undermaintainance_elevator
 
-class RequestElevatorAPIView(CreateAPIView):
+class ElevatorViewSet(viewsets.ModelViewSet):
     """
-    Api to request an elevator for service by a user
-    This api will assign an optimal Elevator to this request according to the business logic.
-    """
-    serializer_class = RequestSerializer
-
-    def perform_create(self, serializer):
-        """ 
-        creates a new user request and assign an optimal elevator
-        """
-        pickup_floor =  serializer.validated_data['pick_up_floor']
-        elevator_assigned_id = get_most_suitable_elevator(pickup_floor)
-        elevator_assigned_obj = Elevator.objects.filter(id=elevator_assigned_id).annotate(
-            systems_max_floor = F('system__max_floors')
-        ).first()
-        if elevator_assigned_obj.elevator_status == ELEVATOR_STATUS_CHOICES.IDLE:
-            elevator_assigned_obj.elevator_status= (
-                ELEVATOR_STATUS_CHOICES.GOING_UP if (
-                    pickup_floor >= elevator_assigned_obj.current_floor and
-                    pickup_floor < elevator_assigned_obj.systems_max_floor
-                )
-                else ELEVATOR_STATUS_CHOICES.GOING_DOWN
-            )
-            elevator_assigned_obj.next_floor = pickup_floor
-            elevator_assigned_obj.save()
-        
-        serializer.validated_data['elevator'] = elevator_assigned_obj
-        serializer.save()
-
-        return Response(serializer.data)
-
-
-class MoveElevatorAPIview(UpdateAPIView):
-    """
-    APi to move elevator to next floors
+    Viewset for all operations on the Elevator.
     """
     queryset = Elevator.objects.all()
-    serializer_class = MoveElevatorSerializer
     lookup_field = 'id'
     lookup_url_kwarg = 'elevator_id'
 
-    def initial(self, request, *args, **kwargs):
+    def get_serializer_class(self):
         """
-        Only patch method is allowed
+        Return different serializers based on the action being performed.
         """
-        super().initial(request, *args, **kwargs)
-        if self.request.method != 'PATCH':
-            raise MethodNotAllowed(request.method)
+        if self.action == 'get_all_active_request':
+            return RequestSerializer
+        elif self.action == 'open_close_doors':
+            return DoorStatusSerializer
+        else:
+            return MoveElevatorSerializer
 
-    def perform_update(self, serializer):
+
+    @action(detail=True, methods=['patch'])
+    def move_elevator(self, request):
+        """
+        action to implement the logic of move elevator to next optimal floor
+        """
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_move_elevator(serializer)
+        return Response(serializer.data)
+
+
+    @action(detail=True, methods=['get'])
+    def get_all_active_request(self, request, elevator_id=None):
+        """
+        get action which returns the list of all requests in active/boarded state for current elevator
+        """
+        instance = self.get_object()
+        serializer = RequestSerializer(get_all_requests_for_elevator(elevator_id=instance.id), many=True)
+        return Response(serializer.data)
+
+
+    @action(detail=True, methods=['get'])
+    def get_next_floor(self, request, elevator_id=None):
+        """
+        get action which return the next floor this elevator will be going to
+        """
+
+        all_requests = get_all_requests_for_elevator(elevator_id=self.kwargs[self.lookup_url_kwarg])
+        instance = self.get_object()
+        next_floor = get_next_floor_for_elevator(
+            all_requests, instance.elevator_status, instance.current_floor
+        )
+        data = {
+            "next_floor": 'Elevator has no requests either it is idle or under maintainance' if not next_floor else next_floor
+        }
+
+        return Response(data=data)
+    
+
+    @action(detail=True, methods=['patch'])
+    def mark_under_maintainance(self, request, elevator_id=None):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_mark_under_maintainance(serializer)
+        return Response(serializer.data)
+
+    
+    @action(detail=True, methods=['patch'])
+    def open_close_doors(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update_doors(serializer)
+        return Response(serializer.data)
+
+
+    def perform_move_elevator(self, serializer):
         """
         Updates the Elevators data for next_floor, current_floor, doors_status, and elevator status
         """
@@ -116,42 +146,14 @@ class MoveElevatorAPIview(UpdateAPIView):
             )
             instance.next_floor = None if next_floor == instance.current_floor else next_floor
             instance.save()
+        
 
-
-class GetActiveRequestsForElevator(ListAPIView):
-    """
-    View to return all active request for an elevator
-    """
-    serializer_class = RequestSerializer
-    lookup_url_kwarg = 'elevator_id'
-    
-    def get_queryset(self):
+    def perform_mark_under_maintainance(self, serializer):
         """
-        returns queryset of all active requests for an elevator
+        overwritting perform_update for specific action and its logic
+        removes all the requests active/ boarded from the elevator as fulfilled 
+        marks the elevator under maintaince and takes it to ground floor.
         """
-        elevator_id = self.kwargs.get(self.lookup_url_kwarg)
-        return get_all_requests_for_elevator(elevator_id=elevator_id)
-
-
-class MarkUnderMaintainanceElevator(UpdateAPIView):
-    """
-    View to mark elevator under maintainance and deboard all members at current floor
-    also marl all active requests for this elevator as fulfilled and user can request fro new elevator
-    """
-    queryset = Elevator.objects.all()
-    lookup_field = 'id'
-    lookup_url_kwarg = 'elevator_id'
-    serializer_class = MoveElevatorSerializer
-
-    def initial(self, request, *args, **kwargs):
-        """
-        Only patch method is allowed
-        """
-        super().initial(request, *args, **kwargs)
-        if self.request.method != 'PATCH':
-            raise MethodNotAllowed(request.method)
-
-    def perform_update(self, serializer):
         instance = serializer.instance
         instance.is_under_maintainance = True
         instance.current_floor = 0
@@ -159,66 +161,66 @@ class MarkUnderMaintainanceElevator(UpdateAPIView):
         instance.elevator_status = ELEVATOR_STATUS_CHOICES.IDLE
         instance.door_status = DOOR_STATUS_CHOICES.CLOSED
         instance.save()
-
+        
         remove_people_from_undermaintainance_elevator(instance.id)
     
 
-class OpenCloseElevatorDoors(UpdateAPIView):
-    """
-    Opens/closes the doors of an elevator
-    """
-    queryset = Elevator.objects.all()
-    lookup_field = 'id'
-    lookup_url_kwarg = 'elevator_id'
-    serializer_class = DoorStatusSerializer
-
-    def initial(self, request, *args, **kwargs):
+    def perform_update_doors(self, serializer):
         """
-        Only patch method is allowed
+        opens / closes  doors of the elevator
         """
-        super().initial(request, *args, **kwargs)
-        if self.request.method != 'PATCH':
-            raise MethodNotAllowed(request.method)
-
-    def perform_update(self, serializer):
         instance = serializer.instance
         instance.door_status = DOOR_STATUS_CHOICES.OPEN if instance.door_status == DOOR_STATUS_CHOICES.CLOSED else DOOR_STATUS_CHOICES.CLOSED
         instance.save()
 
 
-class GetNextFloorForElevator(RetrieveAPIView):
+class RequestViewSet(viewsets.ModelViewSet):
     """
-    return the next floor the lift would be going to.
-    """
-    queryset = Elevator.objects.all()
-    lookup_field = 'id'
-    lookup_url_kwarg = 'elevator_id'
-
-    def get(self, request, *args, **kwargs):
-        """
-        overwriting get function to retrieve latest data for next floor
-        """
-        all_requests = get_all_requests_for_elevator(elevator_id=self.kwargs[self.lookup_url_kwarg])
-        instance = self.get_object()
-        next_floor = get_next_floor_for_elevator(
-            all_requests, instance.elevator_status, instance.current_floor
-        )
-        data = {
-            "next_floor": 'Elevator has no requests either it is idle or under maintainance' if not next_floor else next_floor
-        }
-
-        return Response(data=data)
-
-
-class UserDestinationFloorAPI(UpdateAPIView):
-    """
-    request to add destination floor to respective elevator request
-    this will only happen if elevator is already alooted and elevator is at sama floor
+    Api to request an elevator for service by a user
+    This api will assign an optimal Elevator to this request according to the business logic.
     """
     queryset = Request.objects.all()
     lookup_field = 'id'
     lookup_url_kwarg = 'request_id'
-    serializer_class = AddDestianationFloorSerialzer
+
+    def get_serializer_class(self):
+        """
+        Return different serializers based on the action being performed.
+        """
+        if self.action == 'update':
+            return AddDestianationFloorSerialzer
+        else:
+            return RequestSerializer
+
+    def perform_create(self, serializer):
+        """
+        Api to create a new elevator request and assign optimal elevator
+        """
+        pickup_floor =  serializer.validated_data['pick_up_floor']
+        elevator_assigned_id = get_most_suitable_elevator(pickup_floor)
+        elevator_assigned_obj = Elevator.objects.filter(id=elevator_assigned_id).annotate(
+            systems_max_floor = F('system__max_floors')
+        ).first()
+        if elevator_assigned_obj.elevator_status == ELEVATOR_STATUS_CHOICES.IDLE:
+            elevator_assigned_obj.elevator_status= (
+                ELEVATOR_STATUS_CHOICES.GOING_UP if (
+                    pickup_floor >= elevator_assigned_obj.current_floor and
+                    pickup_floor < elevator_assigned_obj.systems_max_floor
+                )
+                else ELEVATOR_STATUS_CHOICES.GOING_DOWN
+            )
+            elevator_assigned_obj.next_floor = pickup_floor
+            elevator_assigned_obj.save()
+        
+        serializer.validated_data['elevator'] = elevator_assigned_obj
+        # if an eleavtor at same floor was assigned mark the request as boarded
+        if elevator_assigned_obj.current_floor == pickup_floor:
+            serializer.validated_data['status'] = REQUEST_STATUS_CHOICES.BOARDED
+        
+        serializer.save()
+
+        return Response(serializer.data)
+
 
     def update(self, request, *args, **kwargs):
         allowed_fields = ['destination_floor']
@@ -237,5 +239,4 @@ class UserDestinationFloorAPI(UpdateAPIView):
         instance.save()
 
         return Response(serializer.data)
-
 
