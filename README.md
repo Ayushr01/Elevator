@@ -59,7 +59,7 @@ Again this might cause in some cases where some users who have boarded the eleva
 
 Now i will add below the api endpoints their impact and purpose and their respective methods and payloads for basic understanding .
 
-For reference https://api.postman.com/collections/18804740-0e076161-be83-4650-906b-1567e005f525?access_key=PMAT-01H570TY83ZMDKDNG2E80E8GJ1 is the postman api collection
+For reference https://www.postman.com/ayushr20s/workspace/elevator/collection/18804740-0e076161-be83-4650-906b-1567e005f525?action=share&creator=18804740 is the postman api collection
 
 1. http://127.0.0.1:8000/api/elevatorsystem/ -> APi to create an eleator system with n elevators (Note onlty Get and post method is allowed for this modelviewset api
    Method - post
