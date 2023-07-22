@@ -29,7 +29,7 @@ class ElevatorViewSet(viewsets.ModelViewSet):
 
 
     @action(detail=True, methods=['patch'])
-    def move_elevator(self, request):
+    def move_elevator(self, request, elevator_id=None):
         """
         action to implement the logic of move elevator to next optimal floor
         """

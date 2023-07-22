@@ -54,8 +54,8 @@ class  AddDestianationFloorSerialzer(serializers.Serializer):
     
     def validate(self, data):
         instance = self.instance
-
-        if not data.get('destination_floor'):
+        destination_floor = data.get('destination_floor')
+        if destination_floor is None: 
             raise ValidationError('Destination floor is expected in payload')
 
         # Check if the request is already processed
