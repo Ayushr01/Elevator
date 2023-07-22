@@ -1,4 +1,3 @@
-from rest_framework.generics import CreateAPIView, UpdateAPIView, ListAPIView, RetrieveAPIView
 from elevator.serializers import AddDestianationFloorSerialzer, DoorStatusSerializer, MoveElevatorSerializer, RequestSerializer
 from rest_framework.response import Response
 from .models import DOOR_STATUS_CHOICES, ELEVATOR_STATUS_CHOICES, REQUEST_STATUS_CHOICES, Elevator, Request
@@ -223,6 +222,9 @@ class RequestViewSet(viewsets.ModelViewSet):
 
 
     def update(self, request, *args, **kwargs):
+        """
+        Api to add destination floor to requests
+        """
         allowed_fields = ['destination_floor']
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
